@@ -12,7 +12,7 @@ def distance(dims, p1, p2):
     xd = abs(p1[0] - p2[0])#%hdx
     yd = abs(p1[1] - p2[1])#%hdy
     #wrapping around produces cyclical behavior. Ideally, some method should be
-    #developped to avoid this while still having the snake be smart enough to 
+    #developped to avoid this while still having the snake be smart enough to
     #go through walls when it needs to, but for now just don't wrap distance
     # if xd > hdx:
     #     xd = xd - hdx
@@ -32,7 +32,7 @@ def move_to(dims, p, direc):
         return (hx, (hy - 1 + dims[1])%dims[1])
     elif direc == 'down':
         return (hx,(hy + 1)%dims[1])
-    return None 
+    return None
 
 def direction_distance(dims, head, pip, direc):
     """ computes distance between head and pip if the head is to move along
@@ -50,7 +50,7 @@ def direction_distance(dims, head, pip, direc):
     return None
 
 def nearest_direction(dims, head, pip, dirs):
-    """of the directions listed in dirs, compute the one along which a move of 
+    """of the directions listed in dirs, compute the one along which a move of
     the head would put it closest to the pip, return (distance, direction)
     """
     return min([(direction_distance(dims, head, pip, x), x) for x in dirs])
@@ -60,16 +60,21 @@ class SnakeTronAI1():
     """ An object of this class is to be passed to a SnakeTron contstructor.
     The SnakeTron object will call the update method of this class after every
     frame update.
-    This is a basic ai which follows two rules: go to the pip and avoid the 
-    other snake. It will always make the move that will bring it closest to the 
-    pip as long as that move doesn't cause it collide with the enemy. 
+    This is a basic ai which follows two rules: go to the pip and avoid the
+    other snake. It will always make the move that will bring it closest to the
+    pip as long as that move doesn't cause it collide with the enemy.
     """
     def __init__(self):
-        pass
+        self.dirs = ['left', 'right', 'up', 'down']
+        # directions opposite each direction
+        self.dir_ops = {'left': 'right',
+                        'right': 'left',
+                        'up': 'down',
+                        'down': 'up'}
 
-    def update(self, dims, mysnake, opsnake, pip, last_pip):
-        """output 'left', 'right', 'up', or 'down' command to snake. 
-        
+    def update(self, gamestate, snake_id):
+        """output 'left', 'right', 'up', or 'down' command to snake.
+
         Inputs:
         dims - (x,y) field dimensions
         mysnake - own Snake object (Snake class defined in snaketron module)
@@ -77,19 +82,22 @@ class SnakeTronAI1():
         pip - Pip object (Pip class defined in snketron module)
         last_pip - True if your snake had the last pip, False otherwise
         """
+        if snake_id == 1:
+            mysnake = gamestate.s1
+            opsnake = gamestate.s2
+        else:
+            mysnake = gamestate.s2
+            opsnake = gamestate.s1
+        dims = gamestate.dims
+        pip = gamestate.pip
+        last_pip = gamestate.last_pip == snake_id
+
+
         myhead = mysnake.body[0]
         pl = pip.location()
         mydir = mysnake.direc
-        outcom = mydir
-        if mydir == 'left':
-            dirs = ['left', 'up', 'down']
-        if mydir == 'right':
-            dirs = ['right', 'down', 'up']
-        if mydir == 'up':
-            dirs = ['up', 'left', 'right']
-        if mydir == 'down':
-            dirs = ['down', 'right', 'left']
-        
+        dirs = list(set(self.dirs) - set([self.dir_ops[mydir]]))
+
         #a penalty for each direction is computed, and the one with the lowest
         #penalty wins
         d = [direction_distance(dims, myhead, pl, x) for x in dirs]
@@ -111,7 +119,7 @@ class SnakeTronAI1():
 def play():
     ai1 = SnakeTronAI1()
     ai2 = SnakeTronAI1()
-    snaketron.play_ai(ai1)
+    snaketron.play_ai(ai1, ai2)
 
 if __name__ == '__main__':
     print "play snaketron against ai"
