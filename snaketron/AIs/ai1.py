@@ -65,9 +65,14 @@ class SnakeTronAI1():
     pip as long as that move doesn't cause it collide with the enemy.
     """
     def __init__(self):
-        pass
+        self.dirs = ['left', 'right', 'up', 'down']
+        # directions opposite each direction
+        self.dir_ops = {'left': 'right',
+                        'right': 'left',
+                        'up': 'down',
+                        'down': 'up'}
 
-    def update(self, dims, mysnake, opsnake, pip, last_pip):
+    def update(self, gamestate, snake_id):
         """output 'left', 'right', 'up', or 'down' command to snake.
 
         Inputs:
@@ -77,18 +82,21 @@ class SnakeTronAI1():
         pip - Pip object (Pip class defined in snketron module)
         last_pip - True if your snake had the last pip, False otherwise
         """
+        if snake_id == 1:
+            mysnake = gamestate.s1
+            opsnake = gamestate.s2
+        else:
+            mysnake = gamestate.s2
+            opsnake = gamestate.s1
+        dims = gamestate.dims
+        pip = gamestate.pip
+        last_pip = gamestate.last_pip == snake_id
+
+
         myhead = mysnake.body[0]
         pl = pip.location()
         mydir = mysnake.direc
-        outcom = mydir
-        if mydir == 'left':
-            dirs = ['left', 'up', 'down']
-        if mydir == 'right':
-            dirs = ['right', 'down', 'up']
-        if mydir == 'up':
-            dirs = ['up', 'left', 'right']
-        if mydir == 'down':
-            dirs = ['down', 'right', 'left']
+        dirs = list(set(self.dirs) - set([self.dir_ops[mydir]]))
 
         #a penalty for each direction is computed, and the one with the lowest
         #penalty wins

@@ -52,8 +52,8 @@ class SnakeTron():
         self.display = True
         self.screen = pygame.display.set_mode(screen_size)
         self.gamestate = GameState()
-        self.s1dir = 'right'
-        self.s2dir = 'left'
+        self.s1_dir = 'right'
+        self.s2_dir = 'left'
         pygame.display.set_caption("SnakeTron")
 
     def play(self, per=100):
@@ -70,9 +70,9 @@ class SnakeTron():
             if event.type == pygame.KEYDOWN: self.human_input(event.key)
             if event.type == pygame.USEREVENT:
                 self.screen.fill(backround)
-                self.s1.paint(self.screen)
-                self.s2.paint(self.screen)
-                self.pip.paint(self.screen)
+                self.gamestate.s1.paint(self.screen)
+                self.gamestate.s2.paint(self.screen)
+                self.gamestate.pip.paint(self.screen)
                 win = self.gamestate.update(self.s1_dir, self.s2_dir)
                 pygame.display.update()
                 if win != None:
@@ -108,7 +108,7 @@ class GameState():
     """
     Stores and updates the state of the game.
     """
-    def init(self):
+    def __init__(self):
         self.dims = (blocksx, blocksy)
         self.s1 = Snake(init_loc=(10, 10), init_dir="right",
             body_color=pygame.Color(255, 0, 0, 1))
@@ -250,6 +250,9 @@ class Snake():
         or  self.direc == 'down' and direc == 'up'):
             return
         self.next_direc = direc
+
+    def get_direction(self):
+        return self.direc
 
     def move(self, pip):
         """Moves the head in the appropriate direction. Now only checks if
