@@ -30,6 +30,9 @@ def paint_block(screen, loc, color):
     block = pygame.Rect((x0, y0), (block_size, block_size))
     pygame.draw.rect(screen, color, block)
 
+def copy_gamestate(gamestate):
+    return {k: gamestate[k][:] for k in gamestate}
+
 class SnakeTron():
     """Wrapper class for snaketron game. Contains the screen, the snakes and
     pip, screen display, and the interface for human players. When created, the
@@ -51,7 +54,7 @@ class SnakeTron():
         self.p2 = p2
         self.display = True
         self.screen = pygame.display.set_mode(screen_size)
-        self.gamestate = GameState()
+        self.gamestate = GameStep.reset()
         self.s1_dir = 'right'
         self.s2_dir = 'left'
         pygame.display.set_caption("SnakeTron")
@@ -70,18 +73,17 @@ class SnakeTron():
             if event.type == pygame.KEYDOWN: self.human_input(event.key)
             if event.type == pygame.USEREVENT:
                 self.screen.fill(backround)
-                self.gamestate.s1.paint(self.screen)
-                self.gamestate.s2.paint(self.screen)
-                self.gamestate.pip.paint(self.screen)
-                win = self.gamestate.update(self.s1_dir, self.s2_dir)
+                Snake.paint(self.gamestate, 1, self.screen)
+                Snake.paint(self.gamestate, 2, self.screen)
+                Pip.paint(self.gamestate, self.screen)
+                win = GameStep.update(self.gamestate, self.s1_dir, self.s2_dir)
                 pygame.display.update()
                 if win != None:
                     return win
-                # This trusts the AI not to alter the gamestate...
                 if self.p1 != 'human':
-                    self.s1_dir = self.p1.update(self.gamestate, 1)
+                    self.s1_dir = self.p1.update(copy_gamestate(self.gamestate), 1)
                 if self.p2 != 'human':
-                    self.s2_dir = self.p2.update(self.gamestate, 2)
+                    self.s2_dir = self.p2.update(copy_gamestate(self.gamestate), 2)
 
     def human_input(self, key):
         """Takes a pressed key and updates snake direction"""
@@ -104,183 +106,204 @@ class SnakeTron():
             elif key == K_DOWN:
                 self.s2_dir = 'down'
 
-class GameState():
+# Full state of the game should be represented in a single dict
+class GameStep():
     """
-    Stores and updates the state of the game.
+    Compute one step of the game (or reset to step 1).
     """
-    def __init__(self):
-        self.dims = (blocksx, blocksy)
-        self.s1 = Snake(init_loc=(10, 10), init_dir="right",
-            body_color=pygame.Color(255, 0, 0, 1))
-        self.s2 = Snake(init_loc=(20, 20), init_dir="left",
-            body_color=pygame.Color(0, 255, 0, 1))
-        self.pip = Pip(self.s1, self.s2)
-        self.last_pip = 1
 
-    def update(self, s1dir, s2dir):
-        self.s1.set_direction(s1dir)
-        self.s2.set_direction(s2dir)
-        self.s1.move(self.pip)
-        self.s2.move(self.pip)
-        return self.check_collisions()
+    @staticmethod
+    def reset():
+        """
+        Get a new gamestate with starting config.
+        """
+        gamestate = {
+            'dims': [(blocksx, blocksy)],
+            'pip': [('replaced in Pip.recet')],
+            'last_pip': [(1,)]
 
-    def check_collisions(self):
+        }
+        Snake.reset(gamestate, 1)
+        Snake.reset(gamestate, 2)
+        Pip.reset(gamestate)
+        return gamestate
+
+    @staticmethod
+    def update(gamestate, s1dir, s2dir):
+        Snake.set_direction(gamestate, 1, s1dir)
+        Snake.set_direction(gamestate, 2, s2dir)
+        Snake.move(gamestate, 1)
+        Snake.move(gamestate, 2)
+        return GameStep.check_collisions(gamestate)
+
+    @staticmethod
+    def check_collisions(gamestate):
         """check updated snake body queues for collision with pip or enemy
         snake. If pip is found, this method relocates it. If collision, return
         the winning snake. Otherwise, return None. Last snake to get the pip
         gets priority in head to head collisions and simultaneous head-tail
         collisions.
         """
-        if self.last_pip == 1:
-            if self.s1.is_present(self.s2.body[0]):
+        pip = gamestate['pip'][0]
+        last_pip = gamestate['last_pip'][0][0]
+        s1_body = gamestate[(1, 'body')]
+        s2_body = gamestate[(2, 'body')]
+        if last_pip == 1:
+            if Snake.is_present(gamestate, 1, s2_body[0]):
                 return 1
-            if self.s2.is_present(self.s1.body[0]):
+            if Snake.is_present(gamestate, 2, s1_body[0]):
                 return 2
         else:
-            if self.s2.is_present(self.s1.body[0]):
+            if Snake.is_present(gamestate, 2, s1_body[0]):
                 return 2
-            if self.s1.is_present(self.s2.body[0]):
+            if Snake.is_present(gamestate, 1, s2_body[0]):
                 return 1
 
-        if self.s1.body[0] == self.pip.location():
-                self.pip.relocate(self.s1, self.s2)
-                self.s1.set_head_color('yellow')
-                self.s2.set_head_color('white')
-                self.last_pip = 1
-        if self.s2.body[0] == self.pip.location():
-                self.pip.relocate(self.s1, self.s2)
-                self.s2.set_head_color('yellow')
-                self.s1.set_head_color('white')
-                self.last_pip = 2
-        return None
+        if s1_body[0] == pip:
+                Pip.relocate(gamestate)
+                gamestate['last_pip'] = [(1,)]
+        if s2_body[0] == pip:
+                Pip.relocate(gamestate)
+                gamestate['last_pip'] = [(2,)]
 
 class Pip():
     """Implements the pip"""
 
-    def __init__(self, s1, s2, c=pygame.Color(0, 0, 255, 1)):
+    @staticmethod
+    def reset(gamestate):
         """initializes color and position"""
-        self.relocate(s1, s2)
-        self.color = c
+        Pip.relocate(gamestate)
 
-    def location(self):
-        return self.loc
+    @staticmethod
+    def location(gamestate):
+        return gamestate['pip'][0]
 
-    def paint(self, screen):
+    @staticmethod
+    def paint(gamestate, screen):
         """paints pip on the screen"""
-        paint_block(screen, self.loc, self.color)
+        c = pygame.Color(0, 0, 255, 1)
+        paint_block(screen, gamestate['pip'][0], c)
 
-    def relocate(self, s1, s2):
+    @staticmethod
+    def relocate(gamestate):
         """Randomly places a pip at a location not occupied by either snake
         """
-        self.loc = (randint(0, blocksx-1), randint(0, blocksy-1))
-        while s1.is_present(self.loc) or s2.is_present(self.loc):
-            self.loc = (randint(0, blocksx-1), randint(0, blocksy-1))
+        loc = (randint(0, blocksx-1), randint(0, blocksy-1))
+        while Snake.is_present(gamestate, 1, loc) or Snake.is_present(gamestate, 2, loc):
+            loc = (randint(0, blocksx-1), randint(0, blocksy-1))
+        gamestate['pip'][0] = loc
 
 class Snake():
     """Implements the snake by drawing rectangles on canvas"""
 
-    def __init__(self,
-                 init_loc=(15, 15),
-                 init_dir= 'left',
-                 init_len=10,
-                 head_color=pygame.Color(255, 255, 255, 1),
-                 body_color=pygame.Color(0, 255, 0, 1)):
-        """Initialize snake object.
+    @staticmethod
+    def reset(gamestate, sid, init_len=10):
+        if sid == 1:
+            init_dir = 'right'
+            init_loc = (10, 10)
+        if sid == 2:
+            init_dir = 'left'
+            init_loc = (20, 20)
 
-        Inputs:
-        init_loc - initial location of snake. Top left corner is (0,0)
-        init_dir - initial direction of snake motion
-        init_len - initial length of snake
-        head_color - color of snakes head
-        body_color - color of snakes body
-        """
-        self.direc = init_dir
-        self.length = init_len
-        self.head_color = head_color
-        self.body_color = body_color
-        self.next_direc = init_dir
-        #queue containing all current locations of snake
         if init_dir == 'left':
-            self.body = deque([(init_loc[0] + x, init_loc[1])
-                        for x in range(init_len)])
+            body =      [(init_loc[0] + x, init_loc[1])
+                        for x in range(init_len)]
         if init_dir == 'right':
-            self.body = deque([(init_loc[0] - x, init_loc[1])
-                        for x in range(init_len)])
+            body = [(init_loc[0] - x, init_loc[1])
+                        for x in range(init_len)]
         if init_dir == 'up':
-            self.body = deque([(init_loc[0], init_loc[1] + x)
-                        for x in range(init_len)])
+            body = [(init_loc[0], init_loc[1] + x)
+                        for x in range(init_len)]
         if init_dir == 'down':
-            self.body = deque([(init_loc[0], init_loc[1] - x)
-                        for x in range(init_len)])
+            body =      [(init_loc[0], init_loc[1] - x)
+                        for x in range(init_len)]
 
-    def set_head_color(self, c='white'):
-        """sets head color to "white" or "yellow" """
-        if c == 'white':
-            self.head_color = pygame.Color(255, 255, 255)
-        elif c == 'yellow':
-            self.head_color = pygame.Color(255, 255, 0)
+        gamestate[(sid, 'direction')] = init_dir
+        gamestate[(sid, 'next_direction')] = init_dir
+        gamestate[(sid, 'body')] = body
 
-    def paint(self, screen, bgr=pygame.Color(0, 0, 0, 1)):
+
+
+    @staticmethod
+    def paint(gamestate, sid, screen, bgr=pygame.Color(0, 0, 0, 1)):
         """Paint the snake object on the backround.
 
         Inputs:
         screen - pygame display object
         bgr - background color, default black
         """
+        body = gamestate[(sid, 'body')]
+        if gamestate['last_pip'][0][0] == sid:
+            head_color = pygame.Color(255, 255, 0)
+        else:
+            head_color = pygame.Color(255, 255, 255)
+        if sid == 1:
+            body_color=pygame.Color(255, 0, 0, 1)
+        if sid == 2:
+            body_color=pygame.Color(0, 255, 0, 1)
 
-        for i, block in enumerate(self.body):
+        for i, block in enumerate(body):
             if i == 0:
-                paint_block(screen, block, self.head_color)
+                paint_block(screen, block, head_color)
             else:
-                paint_block(screen, block, self.body_color)
+                paint_block(screen, block, body_color)
 
-    def is_present(self, loc):
+    @staticmethod
+    def is_present(gamestate, sid, loc):
         """checks if location loc is on top of the snake"""
-        if loc in self.body:
+        body = gamestate[(sid, 'body')]
+        if loc in body:
             return True
         else:
             return False
 
-    def set_direction(self, direc):
+    @staticmethod
+    def set_direction(gamestate, sid, direc):
         if not direc in ['left', 'right', 'up', 'down']:
             return
-        if (self.direc == 'left' and direc == 'right'
-        or  self.direc == 'right' and direc == 'left'
-        or  self.direc == 'up' and direc == 'down'
-        or  self.direc == 'down' and direc == 'up'):
+        curr_direc = gamestate[(sid, 'direction')]
+        if (curr_direc == 'left' and direc == 'right'
+        or  curr_direc == 'right' and direc == 'left'
+        or  curr_direc == 'up' and direc == 'down'
+        or  curr_direc == 'down' and direc == 'up'):
             return
-        self.next_direc = direc
+        gamestate[(sid, 'next_direction')] = [(direc,)]
 
-    def get_direction(self):
-        return self.direc
+    @staticmethod
+    def get_direction(gamestate, sid):
+        return gamestate[(sid, 'direction')][0][0]
 
-    def move(self, pip):
+    @staticmethod
+    def move(gamestate, sid):
         """Moves the head in the appropriate direction. Now only checks if
         encountered pip and extends. Does not move pip or check for collisions.
         """
-        self.direc = self.next_direc
-        if self.direc == 'left':
-            nhead = (self.body[0][0] - 1, self.body[0][1])
-        if self.direc == 'right':
-            nhead = (self.body[0][0] + 1, self.body[0][1])
-        if self.direc == 'up':
-            nhead = (self.body[0][0], self.body[0][1] - 1)
-        if self.direc == 'down':
-            nhead = (self.body[0][0], self.body[0][1] + 1)
+        gamestate[(sid, 'direction')] = gamestate[(sid, 'next_direction')]
+        direc = gamestate[(sid, 'direction')][0][0]
+        body = gamestate[(sid, 'body')]
+        pip = gamestate['pip'][0]
+        if direc == 'left':
+            nhead = (body[0][0] - 1, body[0][1])
+        if direc == 'right':
+            nhead = (body[0][0] + 1, body[0][1])
+        if direc == 'up':
+            nhead = (body[0][0], body[0][1] - 1)
+        if direc == 'down':
+            nhead = (body[0][0], body[0][1] + 1)
 
         nhead = ((nhead[0] + blocksx)%blocksx, (nhead[1] + blocksy)%blocksy)
 
         #check if overlapping self
-        if nhead in self.body:
+        if nhead in body:
             #truncate tail
-            val = self.body.pop()
+            val = body.pop()
             while val != nhead:
-                val = self.body.pop()
+                val = body.pop()
 
-        self.body.appendleft(nhead)
-        if nhead == pip.location():
+        body.insert(0, nhead)
+        if nhead == pip:
             return
-        self.body.pop()
+        body.pop()
 
 
 red_win_count = 0

@@ -1,7 +1,7 @@
-import pdb
+import time
 from collections import defaultdict
 from snaketron.AIs.ai1 import SnakeTronAI1
-from snaketron import snaketron
+from snaketron.snaketron import play_ai, Snake, GameStep, copy_gamestate
 from copy import deepcopy, copy
 
 class SnakeTronAI2():
@@ -28,13 +28,13 @@ class SnakeTronAI2():
         Recursive brute force computation of wins/losses for each
         possible move.
         """
-        s1allowed = self.dirs - self.dir_ops[gamestate.s1.get_direction()]
-        s2allowed = self.dirs - self.dir_ops[gamestate.s2.get_direction()]
+        s1allowed = self.dirs - self.dir_ops[Snake.get_direction(gamestate, 1)]
+        s2allowed = self.dirs - self.dir_ops[Snake.get_direction(gamestate, 2)]
         moves = [(s1, s2) for s1 in s1allowed for s2 in s2allowed]
         out = {}
         for move in moves:
-            gsnew = deepcopy(gamestate)
-            win = gsnew.update(move[0], move[1])
+            gsnew = copy_gamestate(gamestate)
+            win = GameStep.update(gsnew, move[0], move[1])
             if win is not None or this_move == max_moves:
                 out[move] = win
                 # If a snake wins on this move, it wins on all future
@@ -78,9 +78,9 @@ class SnakeTronAI2():
 
     def update(self, gamestate, snake_id):
         # last number is the number of moves ahead to look
-        win_lose = self._win_lose_recur(gamestate, 0, 1)
+        # using 3 can run without lag, 4 is makes it too slow
+        win_lose = self._win_lose_recur(gamestate, 0, 3)
         move_quality = self._move_quality(win_lose, snake_id)
-        print move_quality
         best_moves = []
         best_move_score = float('-inf')
         for m in move_quality:
@@ -97,9 +97,9 @@ class SnakeTronAI2():
 
 
 def play():
-    ai1 = SnakeTronAI1()
-    ai2 = SnakeTronAI2()
-    snaketron.play_ai(ai1, ai2)
+    ai1 = SnakeTronAI2()
+    #ai2 = SnakeTronAI1()
+    play_ai(ai1)
 
 if __name__ == '__main__':
     print "play snaketron against ai"

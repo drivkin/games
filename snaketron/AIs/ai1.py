@@ -1,6 +1,6 @@
 """Dmitriy's first attempt at a SnakeTron ai
 """
-from snaketron import snaketron
+from snaketron.snaketron import play_ai, Snake
 
 def distance(dims, p1, p2):
     """determines the distance between two points on a wrapping field dimensions
@@ -83,28 +83,29 @@ class SnakeTronAI1():
         last_pip - True if your snake had the last pip, False otherwise
         """
         if snake_id == 1:
-            mysnake = gamestate.s1
-            opsnake = gamestate.s2
+            mysnake = 1
+            opsnake = 2
         else:
-            mysnake = gamestate.s2
-            opsnake = gamestate.s1
-        dims = gamestate.dims
-        pip = gamestate.pip
-        last_pip = gamestate.last_pip == snake_id
+            mysnake = 2
+            opsnake = 1
+        dims = gamestate['dims'][0]
+        pip = gamestate['pip'][0]
+        last_pip = gamestate['last_pip'][0][0] == snake_id
 
 
-        myhead = mysnake.body[0]
-        pl = pip.location()
-        mydir = mysnake.direc
+        myhead = gamestate[(mysnake, 'body')][0]
+        ophead = gamestate[(opsnake, 'body')][0]
+        pl = pip
+        mydir = gamestate[(snake_id, 'direction')][0][0]
         dirs = list(set(self.dirs) - set([self.dir_ops[mydir]]))
 
         #a penalty for each direction is computed, and the one with the lowest
         #penalty wins
         d = [direction_distance(dims, myhead, pl, x) for x in dirs]
-        hit_self = [mysnake.is_present(move_to(dims, myhead, x)) for x in dirs]
-        hit_op = [opsnake.is_present(move_to(dims, myhead, x)) for x in dirs]
+        hit_self = [Snake.is_present(gamestate, mysnake, move_to(dims, myhead, x)) for x in dirs]
+        hit_op = [Snake.is_present(gamestate, opsnake, move_to(dims, myhead, x)) for x in dirs]
         doh = [not last_pip
-               and direction_distance(dims, myhead, opsnake.body[0], x) <3
+               and direction_distance(dims, myhead, ophead, x) <3
                for x in dirs]
 
 
@@ -118,8 +119,8 @@ class SnakeTronAI1():
 
 def play():
     ai1 = SnakeTronAI1()
-    ai2 = SnakeTronAI1()
-    snaketron.play_ai(ai1, ai2)
+    #ai2 = SnakeTronAI1()
+    play_ai(ai1)
 
 if __name__ == '__main__':
     print "play snaketron against ai"
